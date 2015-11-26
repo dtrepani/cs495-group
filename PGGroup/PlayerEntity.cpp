@@ -1,14 +1,13 @@
 #include "PlayerEntity.h"
 
-PlayerEntity::PlayerEntity(ThreeAxis* aPosition, GLuint *aTexture, GLuint aVBO)
-: Entity(aPosition, aTexture, aVBO) {
+PlayerEntity::PlayerEntity(ThreeAxis* aPosition, GLuint *aTexture, GLfloat* aVertices)
+: Entity(aPosition, aTexture, aVertices) {
 	state = STANDING;
 	interact = false;
 	health = 100; // can change later if wanted ?
 }
 
-PlayerEntity::~PlayerEntity(void) {
-}
+PlayerEntity::~PlayerEntity(void) {}
 
 void PlayerEntity::pain(int hurt){
 	health -= hurt;

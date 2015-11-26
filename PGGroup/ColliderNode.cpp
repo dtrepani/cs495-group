@@ -37,3 +37,6 @@ int ColliderNode::sumOfRadii(ColliderNode* otherCollider) {
 	return	( entity->getRadius() + otherEntity->getRadius() );
 }
 
+ColliderNode* ColliderNode::getNext() { return next; }
+ColliderEntity* ColliderNode::getEntity() { return entity; }
+
