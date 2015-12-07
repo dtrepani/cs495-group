@@ -1,16 +1,14 @@
 #include "PlayerEntity.h"
-#include "ColliderEntity.h"
-#include "ColliderLinkedList.h"
+#include "LinkedList.h"
 
 #define PI 3.1415926535897932384626433832795
 
-PlayerEntity::PlayerEntity(Vector* aPosition, GLuint *aTexture, GLfloat* aVertices)
-: Entity(aPosition, aTexture, aVertices) {
+PlayerEntity::PlayerEntity(Vector* aPosition, float aRadius)
+: Entity(aPosition, NULL, NULL, aRadius) {
 	state = STANDING;
 	isTurning = false;
 	interact = false;
 	health = 100; // can change later if wanted ?
-	addCollider(0, 0, 0, 0);
 	sensitivityRotation = 1.5f;
 }
 
@@ -45,9 +43,6 @@ void PlayerEntity::turn180(){
 		initialTurnDegree = rotation->getY();
 	}
 }
-
-// Add a collider entity to the list of colliders
-void PlayerEntity::addCollider(float x, float y, float z, float radius) { colliders->add(new ColliderEntity(new Vector(x, y, z), NULL, NULL, radius, position, true)); }
 
 // Player moves forwards or backwards based on the direction they're currently facing.
 void PlayerEntity::moveForward(bool forward) {
@@ -102,14 +97,14 @@ void PlayerEntity::checkTurn180() {
 
 // Adjusts the camera to the player's position and rotation.
 // Translation is negative because player's position is opposite what other entities' would be due to the rotation above.
+// The Y translation is adjusted slightly to make the camera act as if it's out of the eyes of a person (off-center), while
+// maintaining the actual center of the player.
 void PlayerEntity::drawSelf(GLfloat (&matrix)[16], LinkedList* entities) {
 	glLoadMatrixf(matrix);
 
 	checkJump();
 	checkTurn180();
 
-	// TO-DO: Check for collisions HERE!!! Not main!
-	//		  When collided with floor, state = STANDING
 	if(entities->checkForCollision(this)) {
 		state = STANDING;
 	}
@@ -120,7 +115,7 @@ void PlayerEntity::drawSelf(GLfloat (&matrix)[16], LinkedList* entities) {
 	delete tmp;
 
 	glRotatef( rotation->getY(), 0, 1, 0 );
-	glTranslatef(-position->getX(), -position->getY(), -position->getZ()); 
+	glTranslatef(-position->getX(), -position->getY()-0.3f, -position->getZ()); 
 
 	glGetFloatv(GL_MODELVIEW_MATRIX, matrix);
 }

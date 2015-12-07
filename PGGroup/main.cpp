@@ -64,23 +64,23 @@ void initOpenGL() {
 // Better suited in the level superclass
 // texture may be used when the same texture is needed multiple times throughout a level, such as for the aisles in the tutorial.
 // In this case, create the texture beforehand and pass it in.
-Entity* createEntity(string name, GLuint* texture, GLfloat* vertices, float x, float y, float z) { 
-	return new Entity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices);
+Entity* createEntity(string name, GLuint* texture, GLfloat* vertices, float radius, float x, float y, float z) { 
+	return new Entity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, radius);
 }
 PlaneEntity* createPlaneEntity(string name, GLuint* texture, Orientation orientation, GLfloat* vertices, float x, float y, float z) {
 	return new PlaneEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, orientation);
 }
 BlockEntity* createBlockEntity(string name, GLuint* texture, float x, float y, float z, float widthX, float heightY, float lengthZ) {
-	return new BlockEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, NULL, BLOCK, widthX, heightY, lengthZ);
+	return new BlockEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, widthX, heightY, lengthZ);
 }
-InteractableEntity* createInteractableEntity(string name, GLuint* texture, GLfloat* vertices, float x, float y, float z) { 
-	return new InteractableEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices);
+InteractableEntity* createInteractableEntity(string name, GLuint* texture, GLfloat* vertices, float radius, float x, float y, float z) { 
+	return new InteractableEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, radius);
 }
-PlayerEntity* createPlayerEntity(float x, float y, float z) { 
-	return new PlayerEntity(new Vector(x, y, z), NULL, NULL); 
+PlayerEntity* createPlayerEntity(float x, float y, float z, float radius) { 
+	return new PlayerEntity(new Vector(x, y, z), radius); 
 }
-WizardEntity* createWizardEntity(string name, GLfloat* vertices, float x, float y, float z) { 
-	return new WizardEntity(new Vector(x, y, z), createTexture(name), vertices); 
+WizardEntity* createWizardEntity(string name, GLfloat* vertices, float radius, float x, float y, float z) { 
+	return new WizardEntity(new Vector(x, y, z), createTexture(name), vertices, radius); 
 }
 
 // Each texture being created goes through the same method calls and is named with a number, referenced by index.
@@ -149,20 +149,21 @@ void pollEventsAndDraw() {
 	bool collision[5] = {false};
 	LinkedList* entities = new LinkedList();
 
+	PlayerEntity* player = createPlayerEntity(0, 1.0f, 0, NULL);
+
 	GLfloat modelVert[12] = {
 		-1.0, -1.0,  0,
 		 1.0, -1.0,  0,
 		 1.0,  1.0,  0,
 		-1.0,  1.0,  0};
-	Entity* tmpModel = createEntity("1", NULL, &modelVert[0], 0, 1.0f, -10.0f);
-	tmpModel->addCollider(0, 0, 0, 0);
+	Entity* tmpModel = createEntity("1", NULL, &modelVert[0], 0, 1.0f, -10.0f, NULL);
 	tmpModel->incrementYOf(ROTATION, 20.0f);
 
 	GLfloat floorVert[12] = { 
-		-3.0, 0.0,  40.0,
-		 3.0, 0.0,  40.0,
-		 3.0, 0.0, -40.0,
-		-3.0, 0.0, -40.0};
+		-6.0, 0.0,  40.0,
+		 6.0, 0.0,  40.0,
+		 6.0, 0.0, -40.0,
+		-6.0, 0.0, -40.0};
 	PlaneEntity* tmpFloor = createPlaneEntity("2", NULL, HORIZONTAL, &floorVert[0], 0, 0, 0);
 
 	GLuint* wallTex = createTexture("3");
@@ -171,8 +172,8 @@ void pollEventsAndDraw() {
 		0.0, 10.0,  30.0,
 		0.0, 10.0, -40.0,
 		0.0, 0.0, -40.0};
-	PlaneEntity* tmpWall1 = createPlaneEntity("", wallTex, VERTICAL_Z, &wallVert[0], -3.0f, 0, 0);
-	PlaneEntity* tmpWall2 = createPlaneEntity("", wallTex, VERTICAL_Z, &wallVert[0], 3.0f, 0, 0);
+	PlaneEntity* tmpWall1 = createPlaneEntity("", wallTex, VERTICAL_Z, &wallVert[0], -6.0f, 0, 0);
+	PlaneEntity* tmpWall2 = createPlaneEntity("", wallTex, VERTICAL_Z, &wallVert[0], 6.0f, 0, 0);
 	
 	GLuint* stepTex = createTexture("4");
 	GLfloat floorVert2[12] = { 
@@ -180,26 +181,23 @@ void pollEventsAndDraw() {
 		 1.0, 0.0,  3.0,
 		 1.0, 0.0, -3.0,
 		-1.0, 0.0, -3.0};
-	//PlaneEntity* tmpFloor2 = createPlaneEntity("", stepTex, HORIZONTAL, floorVert2, 0, 2.0f, -7.0f);
+	PlaneEntity* tmpFloor2 = createPlaneEntity("", stepTex, HORIZONTAL, floorVert2, 0, 2.0f, -7.0f);
 	GLfloat floorVert3[12] = { 
 		-1.0, 2.0,  0.0,
 		 1.0, 2.0,  0.0,
 		 1.0, -2.0, 0.0,
 		-1.0, -2.0, 0.0};
-	//PlaneEntity* tmpFloor3 = createPlaneEntity("", stepTex, VERTICAL_X, floorVert3, 0, 0.0f, -4.0f);
+	PlaneEntity* tmpFloor3 = createPlaneEntity("", stepTex, VERTICAL_X, floorVert3, 0, 0.0f, -4.0f);
 
-	BlockEntity* tmpBlock = createBlockEntity("", stepTex, 0.0f, 0.0f, -7.0f, 3.0f, 3.0f, 5.0f);
+	BlockEntity* tmpBlock = createBlockEntity("", stepTex, 0.0f, 0.25f, 7.0f, 4.0f, 0.5f, 5.0f);
 
-	
 	//entities->add(tmpModel);
 	entities->add(tmpWall1);
 	entities->add(tmpWall2);
 	entities->add(tmpFloor);
-	//entities->add(tmpFloor2);
-	//entities->add(tmpFloor3);
+	entities->add(tmpFloor2);
+	entities->add(tmpFloor3);
 	entities->add(tmpBlock);
-
-	PlayerEntity* player = createPlayerEntity(0, 1.0f, 0);
 	// ========== END TEST ========== //
 
 	while( running ) {
