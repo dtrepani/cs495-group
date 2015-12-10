@@ -6,11 +6,11 @@
 #include "main.h"
 
 SDL_Window *mainWindow;
+LinkedList* entities;
 
 int main(int argc, char **argv) {
 	init();
 	pollEventsAndDraw();
-
 	SDL_DestroyWindow(mainWindow);
 	SDL_Quit();
 	return 0;
@@ -20,7 +20,6 @@ int main(int argc, char **argv) {
 void init() {
 	initWindow();
 	initOpenGL();
-
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 }
@@ -30,7 +29,7 @@ void initWindow() {
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-	mainWindow = SDL_CreateWindow(	"Game",
+	mainWindow = SDL_CreateWindow(	"GumballZ",
 									SDL_WINDOWPOS_UNDEFINED,
 									SDL_WINDOWPOS_UNDEFINED, 
 									WIDTH, HEIGHT, 
@@ -43,10 +42,9 @@ void initWindow() {
 // Initialize OpenGL
 void initOpenGL() {
 	double ratio = ((double)WIDTH) / ((double)HEIGHT);
-
 	glShadeModel(GL_SMOOTH);
-	//glClearColor(1, 1, 1, 1);
-	glClearColor(0.35f, 0.6f, 1, 1);
+	//glClearColor(0.35f, 0.6f, 1, 1);
+	glClearColor(0.1f, 0.1f, 0.1f, 1);
 	glClearDepth(1);
 	glEnable(GL_TEXTURE_2D);
 	glEnable(GL_DEPTH_TEST);
@@ -60,7 +58,6 @@ void initOpenGL() {
 				-tan( 45.0/360*PI ) * 0.1,
 				 tan( 45.0/360*PI ) * 0.1,
 				0.1, 100 );
-
 	// Enable blending
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
@@ -70,22 +67,32 @@ void initOpenGL() {
 // texture may be used when the same texture is needed multiple times throughout a level, such as for the aisles in the tutorial.
 // In this case, create the texture beforehand and pass it in.
 Entity* createEntity(string name, GLuint* texture, GLfloat* vertices, float radius, float x, float y, float z) { 
-	return new Entity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, radius);
+	Entity* entity = new Entity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, radius);
+	entities->add(entity);
+	return entity;
 }
 PlaneEntity* createPlaneEntity(string name, GLuint* texture, Orientation orientation, GLfloat* vertices, float x, float y, float z) {
-	return new PlaneEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, orientation);
+	PlaneEntity* entity = new PlaneEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, orientation);
+	entities->add(entity);
+	return entity;
 }
 BlockEntity* createBlockEntity(string name, GLuint* texture, float x, float y, float z, float widthX, float heightY, float lengthZ) {
-	return new BlockEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, widthX, heightY, lengthZ);
+	BlockEntity* entity = new BlockEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, widthX, heightY, lengthZ);
+	entities->add(entity);
+	return entity;
 }
 InteractableEntity* createInteractableEntity(string name, GLuint* texture, GLfloat* vertices, float radius, float x, float y, float z) { 
-	return new InteractableEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, radius);
+	InteractableEntity* entity = new InteractableEntity(new Vector(x, y, z), (texture == NULL) ? createTexture(name) : texture, vertices, radius);
+	entities->add(entity);
+	return entity;
+}
+WizardEntity* createWizardEntity(string name, GLfloat* vertices, float radius, PlayerEntity* player, float x, float y, float z) { 
+	WizardEntity* entity = new WizardEntity(new Vector(x, y, z), createTexture(name), vertices, radius, player);
+	entities->add(entity);
+	return entity;
 }
 PlayerEntity* createPlayerEntity(float x, float y, float z, float radius) { 
-	return new PlayerEntity(new Vector(x, y, z), radius); 
-}
-WizardEntity* createWizardEntity(string name, GLfloat* vertices, float radius, float x, float y, float z) { 
-	return new WizardEntity(new Vector(x, y, z), createTexture(name), vertices, radius); 
+	return new PlayerEntity(new Vector(x, y, z), radius);
 }
 
 // Each texture being created goes through the same method calls and is in png format.
@@ -127,92 +134,133 @@ void pollEventsAndDraw() {
 	SDL_Event event;
 	bool running = true;
 	bool keys[282] = { false };
+	entities = new LinkedList();
 	
-	// ========== START TEST ========== //
-	bool collision[5] = {false};
-	LinkedList* entities = new LinkedList();
-
-	// NPCs
+	// ========== START LEVEL ========== //
 	PlayerEntity* player = createPlayerEntity(0, 1.0f, 0, NULL);
-	//SkyboxBlockEntity* skybox = new SkyboxBlockEntity();
-	GLfloat modelVert[12] = {
-		-0.5f, -850.0f/400.0f*0.5f,  0,
-		 0.5f, -850.0f/400.0f*0.5f,  0,
-		 0.5f,  850.0f/400.0f*0.5f,  0,
-		-0.5f,  850.0f/400.0f*0.5f,  0};
-	WizardEntity* wizard = createWizardEntity("wizard", &modelVert[0], NULL, 0, 1.5f, -7.0f);
 
-	// FLOOR
-	GLfloat floorVert[12] = { 
-		-6.0, 0.0,  40.0,
-		 6.0, 0.0,  40.0,
-		 6.0, 0.0, -40.0,
-		-6.0, 0.0, -40.0};
-	PlaneEntity* tmpFloor = createPlaneEntity("spaceship_floor", NULL, HORIZONTAL, &floorVert[0], 0, 0, 0);
+	float blockDepth = 0.4f;
+	float lvlWidth  = 4.0f,
+		  lvlHeight = 6.0f;
+	// [Start of plane, length of plane]
+	float lvlLength[5] = { 10.0f, -40.0f, 
+						  -80.0f, -40.0f };
 
-	// WALLS
-	GLuint* wallTex = createTexture("spaceship_wall");
-	GLfloat wallVert[12] = { 
-		0.0, 0.0,  30.0,
-		0.0, 10.0,  30.0,
-		0.0, 10.0, -40.0,
-		0.0, 0.0, -40.0};
-	PlaneEntity* tmpWall1 = createPlaneEntity("", wallTex, VERTICAL_Z, &wallVert[0], -6.0f, 0, 0);
-	PlaneEntity* tmpWall2 = createPlaneEntity("", wallTex, VERTICAL_Z, &wallVert[0], 6.0f, 0, 0);
+	GLuint* texSpaceshipWall = createTexture("spaceship_wall");
+	GLuint* texSpaceShipFloor = createTexture("spaceship_floor");
+
+	// Walls use y+blockDepth for their heightY param to create a a smooth appearance to the outside of the ship
+	// Floors may use z+0.01f for their lengthZ param to prevent clipping with walls
+
+	// FRIST PART
+		// Walls
+	BlockEntity* spaceshipWallLeft = createBlockEntity("", texSpaceshipWall, -lvlWidth,		lvlHeight/2.0f,			lvlLength[0]+lvlLength[1]/2.0f,
+																			  blockDepth,	lvlHeight+blockDepth,	lvlLength[1]);
+	BlockEntity* spaceshipWallRight = createBlockEntity("", texSpaceshipWall, lvlWidth,		lvlHeight/2.0f,			lvlLength[0]+lvlLength[1]/2.0f,
+																			  blockDepth,	lvlHeight+blockDepth,	lvlLength[1]);
+	BlockEntity* spaceshipWallBack = createBlockEntity("", texSpaceshipWall, 0,				lvlHeight/2.0f,			lvlLength[0],
+																			 lvlWidth*2.0f,	lvlHeight+blockDepth,	blockDepth);
+
+		// Floors
+	BlockEntity* spaceshipFloor = createBlockEntity("", texSpaceShipFloor,	0,				0,			lvlLength[0]+lvlLength[1]/2.0f,
+																			lvlWidth*2.0f,	blockDepth,	lvlLength[1]+0.01f);
+	BlockEntity* spaceshipCeiling = createBlockEntity("", texSpaceshipWall,	0,				lvlHeight,	lvlLength[0]+lvlLength[1]/2.0f,
+																			lvlWidth*2.0f,	blockDepth,	lvlLength[1]+0.01f);
+
+	// JP
+	float prevPlatZ = lvlLength[0]+lvlLength[1];
+	BlockEntity* platform1 = createBlockEntity("", texSpaceShipFloor,	1.8f,	0.5f,		prevPlatZ=(prevPlatZ-4.0f),
+																		3.0f,	blockDepth,	4.0f);
+	platform1->setRandomRotation();
+	BlockEntity* platform2 = createBlockEntity("", texSpaceShipFloor,	-2.2f,	0.0f,		prevPlatZ=(prevPlatZ-6.0f),
+																		4.0f,	blockDepth,	3.0f);
+	platform2->setRandomRotation();
+	BlockEntity* platform3 = createBlockEntity("", texSpaceShipFloor,	0.0f,	0.0f,		prevPlatZ=(prevPlatZ-7.0f),
+																		3.0f,	blockDepth,	3.0f);
+	platform3->setRandomRotation();
+	BlockEntity* platform4 = createBlockEntity("", texSpaceShipFloor,	4.5f,	2.0f,		prevPlatZ=(prevPlatZ-6.0f),
+																		3.0f,	blockDepth,	3.0f);
+	platform4->setRandomRotation();
+	BlockEntity* platform5 = createBlockEntity("", texSpaceShipFloor,	-4.0f,	3.0f,		prevPlatZ-6.0f,
+																		3.0f,	blockDepth,	3.0f);
+	platform5->setRandomRotation();
+
+		// Downward fork
+	BlockEntity* platform6 = createBlockEntity("", texSpaceShipFloor,	-3.0f,	-1.0f,		prevPlatZ=(prevPlatZ+1.0f),
+																		3.0f,	blockDepth,	3.0f);
+	platform6->setRandomRotation();
+	BlockEntity* platform7 = createBlockEntity("", texSpaceShipFloor,	0.0f,	-2.0f,		prevPlatZ=(prevPlatZ-5.0f),
+																		3.0f,	blockDepth,	3.0f);
+	platform7->setRandomRotation();
+	BlockEntity* platform8 = createBlockEntity("", texSpaceShipFloor,	2.0f,	-3.0f,		prevPlatZ=(prevPlatZ-6.0f),
+																		3.0f,	blockDepth,	3.0f);
+	platform8->setRandomRotation();
 	
-	// INTERACTABLES
+	BlockEntity* platform9 = createBlockEntity("", texSpaceShipFloor,	0.0f,	-1.0f,		prevPlatZ=(prevPlatZ-5.0f),
+																		3.0f,	blockDepth,	3.0f);
+	platform9->setRandomRotation();
+	BlockEntity* platform10 = createBlockEntity("", texSpaceShipFloor,	-4.0f,	0.0f,		prevPlatZ-7.0f,
+																		3.0f,	blockDepth,	3.0f);
+	platform10->setRandomRotation();
+	BlockEntity* platform11 = createBlockEntity("", texSpaceShipFloor,	2.0f,	1.5f,		prevPlatZ-6.0f,
+																		3.0f,	blockDepth,	3.0f);
+	platform11->setRandomRotation();
+
+
+	// SECOND PART
+		// Walls
+	BlockEntity* spaceshipWallLeft2 = createBlockEntity("", texSpaceshipWall, -lvlWidth,		lvlHeight/2.0f,			lvlLength[2]+lvlLength[3]/2.0f,
+																			   blockDepth,		lvlHeight+blockDepth,	lvlLength[3]);
+	BlockEntity* spaceshipWallRight2 = createBlockEntity("", texSpaceshipWall, lvlWidth,		lvlHeight/2.0f,			lvlLength[2]+lvlLength[3]/2.0f,
+																			   blockDepth,		lvlHeight+blockDepth,	lvlLength[3]);
+	BlockEntity* spaceshipWallFront = createBlockEntity("", texSpaceshipWall, 0,				lvlHeight/2.0f,			lvlLength[2]+lvlLength[3],
+																			  lvlWidth*2.0f,	lvlHeight+blockDepth,	blockDepth);
+
+		// Floors
+	BlockEntity* spaceshipFloor2 = createBlockEntity("", texSpaceShipFloor,	0,				0,			lvlLength[2]+lvlLength[3]/2.0f,
+																			lvlWidth*2.0f,	blockDepth,	lvlLength[3]+0.01f);
+	BlockEntity* spaceshipCeiling2 = createBlockEntity("", texSpaceshipWall,0,				lvlHeight,	lvlLength[2]+lvlLength[3]/2.0f,
+																			lvlWidth*2.0f,	blockDepth,	lvlLength[3]+0.01f);
+	
+
+	// NPCS ===========================
+	GLfloat wizardVert[12] = {
+		-0.4f, -850.0f/400.0f*0.4f,  0,
+		 0.4f, -850.0f/400.0f*0.4f,  0,
+		 0.4f,  850.0f/400.0f*0.4f,  0,
+		-0.4f,  850.0f/400.0f*0.4f,  0};
+	WizardEntity* wizard = createWizardEntity("wizard", &wizardVert[0], 0.0f, player, 1.0f, 1.5f, -7.0f);
+	
+	// INTERACTABLES ===========================
 	GLfloat coinVert[12] = { 
 		-0.25f, -25.0f/75.0f*0.25f,  0.0,
 		 0.25f, -25.0f/75.0f*0.25f,  0.0,
 		 0.25f, 25.0f/75.0f*0.25f, 0.0,
 		-0.25f, 25.0f/75.0f*0.25f, 0.0};
-	CoinInteractableEntity* tmpCoin = new CoinInteractableEntity(new Vector(0, 0.1f, -5.0f), createTexture("coin"), coinVert, 2.0f);
-	
+	CoinInteractableEntity* coin = new CoinInteractableEntity(new Vector(0, 0.1f, -5.0f), createTexture("coin"), coinVert, 1.5f);
+	entities->add(coin);
+	// TO-DO: convert to createX method -^
+
+	/*
 	GLfloat shipVert[12] = { 
-		-2.0f, -800.0f/360.0f*2.0f,  0.0,
-		 2.0f, -800.0f/360.0f*2.0f,  0.0,
-		 2.0f, 800.0f/360.0f*2.0f, 0.0,
-		-2.0f, 800.0f/360.0f*2.0f, 0.0};
-	InteractableEntity* tmpShip = new InteractableEntity(new Vector(0, 4.2f, -15.0f), createTexture("spaceship"), shipVert, 2.0f);
+		-2.0f, 0,  0.0,
+		 2.0f, 0,  0.0,
+		 2.0f, 800.0f/360.0f*4.0f, 0.0,
+		-2.0f, 800.0f/360.0f*4.0f, 0.0};
+	InteractableEntity* tmpShip = new InteractableEntity(new Vector(0, 0, -15.0f), createTexture("spaceship"), shipVert, 1.5f);
+	// TO-DO: convert to createX method -^
 
 	GLfloat gumballMachineVert[12] = { 
 		-0.3f, -2.4f*0.3f,  0.0,
 		 0.3f, -2.4f*0.3f,  0.0,
 		 0.3f, 2.4f*0.3f, 0.0,
 		-0.3f, 2.4f*0.3f, 0.0};
-	InteractableEntity* tmpGumballMachine = new InteractableEntity(new Vector(3.0f, 0.65f, -10.0f), createTexture("gumballmachine"), gumballMachineVert, NULL);
-
-	// MISC
-		// "Step" with planes
-	GLuint* stepTex = createTexture("4");
-	GLfloat floorVert2[12] = { 
-		-1.0, 0.0,  3.0,
-		 1.0, 0.0,  3.0,
-		 1.0, 0.0, -3.0,
-		-1.0, 0.0, -3.0};
-	PlaneEntity* tmpFloor2 = createPlaneEntity("", stepTex, HORIZONTAL, floorVert2, 0, 2.0f, -7.0f);
-	GLfloat floorVert3[12] = { 
-		-1.0, 2.0,  0.0,
-		 1.0, 2.0,  0.0,
-		 1.0, -2.0, 0.0,
-		-1.0, -2.0, 0.0};
-	PlaneEntity* tmpFloor3 = createPlaneEntity("", stepTex, VERTICAL_X, floorVert3, 0, 0.0f, -4.0f);
-
-		// Block
-	BlockEntity* tmpBlock = createBlockEntity("", stepTex, 0.0f, 0.25f, 7.0f, 4.0f, 0.5f, 5.0f);
-
-	//entities->add(tmpModel);
-	entities->add(tmpWall1);
-	entities->add(tmpWall2);
-	entities->add(tmpFloor);
-	//entities->add(tmpFloor2);
-	//entities->add(tmpFloor3);
-	entities->add(tmpBlock);
-	entities->add(tmpShip);
-	entities->add(wizard);
-	entities->add(tmpCoin);
-	entities->add(tmpGumballMachine);
-	// ========== END TEST ========== //
+	InteractableEntity* gumballMachine = new InteractableEntity(new Vector(-3.0f, 0.65f, -10.0f), createTexture("gumballmachine"), gumballMachineVert, NULL);
+	entities->add(gumballMachine);
+	// TO-DO: convert to createX method -^
+	*/
+	
+	// ========== END LEVEL ========== //
 
 	while( running ) {
 		if( SDL_PollEvent(&event) ) {
@@ -221,6 +269,7 @@ void pollEventsAndDraw() {
 			} else if(event.type == SDL_KEYDOWN) {
 				if(event.key.keysym.sym == SDLK_SPACE) player->jump();
 				else if(event.key.keysym.sym == SDLK_x) player->turn180();
+				else if(event.key.keysym.sym == SDLK_f) player->interactWith();
 				keys[event.key.keysym.scancode] = true;
 			} else if(event.type == SDL_KEYUP) {
 				keys[event.key.keysym.scancode] = false;
@@ -231,52 +280,16 @@ void pollEventsAndDraw() {
 		// ========== START TEST ========== //
 		player->incrementYOf(VELOCITY, -0.2f); // gravity
 
-			// Must be  in level superclass: ******
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		glLoadIdentity();
-
 		glColor3f(1, 1, 1);
 
 		GLfloat matrix[16];
 		glGetFloatv(GL_MODELVIEW_MATRIX, matrix);
-
-#ifndef COLLIDED_CONSOLE_HERE
-		if(player->hasCollided(tmpCoin)) {
-			if(!collision[0]) {
-				cout << "Collision: Coin" << endl;
-				collision[0] = true;
-			}
-		} else if(collision[0] == true) collision[0] = false;
-		
-		if(player->hasCollided(tmpWall1)) {
-			if(!collision[1]) {
-				cout << "Collision: Wall1" << endl;
-				collision[1] = true;
-			}
-		} else if(collision[1] == true) collision[1] = false;
-		
-		if(player->hasCollided(tmpWall2)) {
-			if(!collision[2]) {
-				cout << "Collision: Wall2" << endl;
-				collision[2] = true;
-			}
-		} else if(collision[2] == true) collision[2] = false;
-
-		if(player->hasCollided(tmpFloor)) {
-			if(!collision[3]) {
-				cout << "Collision: Floor" << endl;
-				collision[3] = true;
-			}
-		} else if(collision[3] == true) collision[3] = false;
-#endif
-
 		player->drawSelf(matrix, entities); // Used to adjust camera based on player position
 		glLoadMatrixf(matrix);
 
-		//skybox->drawSelf();
 		entities->drawSelf();
-
-			// ******************************* //
 		// ========== END TEST ========== //
 		
 		SDL_GL_SwapWindow(mainWindow);
@@ -286,15 +299,33 @@ void pollEventsAndDraw() {
 	
 		// ========== START TEST ========== //
 	delete entities;
-	delete tmpWall1;
-	delete tmpWall2;
-	delete tmpFloor;
-	delete tmpBlock;
-	delete tmpShip;
-	delete tmpCoin;
-	delete tmpGumballMachine;
+	/*delete spaceshipWallLeft;
+	delete spaceshipWallRight;
+	delete spaceshipWallBack;
+	delete spaceshipFloor;
+	delete spaceshipCeiling;
+	
+	delete platform1;
+	delete platform2;
+	delete platform3;
+	delete platform4;
+	delete platform5;
+	delete platform6;
+	delete platform7;
+	delete platform8;
+	delete platform9;
 
-	delete wizard;
+	delete spaceshipWallLeft2;
+	delete spaceshipWallRight2;
+	delete spaceshipWallFront;
+	delete spaceshipFloor2;
+	delete spaceshipCeiling2;
+
+	//delete tmpShip;
+	delete coin;
+	//delete tmpGumballMachine;
+
+	delete wizard;*/
 	delete player;
 		// ========== END TEST ========== //
 }

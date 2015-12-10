@@ -1,5 +1,6 @@
 #include "Node.h"
 #include "Entity.h"
+#include "PlaneEntity.h"
 
 Node::Node(Entity* anEntity, Node* aNext) {
 	entity = anEntity;
@@ -8,6 +9,7 @@ Node::Node(Entity* anEntity, Node* aNext) {
 
 Node::~Node(void) {
 	delete next;
+	delete entity;
 }
 
 Node* Node::getNext() { return next; }
@@ -37,4 +39,22 @@ bool Node::checkForCollision(Entity* otherEntity) {
 void Node::drawSelf() {
 	if(next) next->drawSelf();
 	entity->drawSelf();
+}
+
+// Assumes entity is a PlaneEntity
+float Node::getMin(int axis) {
+	float min,
+		  planeMin = ((PlaneEntity*)entity)->getMin(axis);
+	if(next) min = next->getMin(axis);
+	else min = planeMin;
+	return ((planeMin < min) ? planeMin : min);
+}
+
+// Assumes entity is a PlaneEntity
+float Node::getMax(int axis) {
+	float max,
+		  planeMax = ((PlaneEntity*)entity)->getMax(axis);
+	if(next) max = next->getMax(axis);
+	else max = planeMax;
+	return ((planeMax > max) ? planeMax : max);
 }

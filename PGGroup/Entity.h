@@ -15,6 +15,7 @@ using namespace std;
 #define Y 1
 #define Z 2
 #define SENSITIVITY 0.2f
+#define SENSITIVITY_ROTATION 1.5f
 
 typedef enum {
 	POSITION,
@@ -31,8 +32,10 @@ protected:
 	Vector* velocity;
 	Vector* scale;
 	float	opacity, radius;
+	bool	passable;
 	GLuint* texture;
 	GLfloat vertices[12];
+	Entity* parent;
 	
 	Vector* getCorrespondingVector(LocationInfo locationInfo);
 	void rotateEntity();
@@ -47,10 +50,11 @@ public:
 	virtual bool isMovingToward(Entity* otherEntity);
 	virtual void drawSelf();
 
-	void move(float gravity);
-	bool hasCollided(PlaneEntity* otherEntity);
-	bool checkForCollision(PlaneEntity* otherEntity);
-	bool isMovingToward(PlaneEntity* otherEntity);
+	void moveForward(bool forward);
+	void strafe(bool left);
+	void rotate(bool left);
+	void setRandomRotation();
+	void set(LocationInfo locInfo, float x, float y, float z);
 	void incrementXOf(LocationInfo locInfo, float x);
 	void incrementYOf(LocationInfo locInfo, float y);
 	void incrementZOf(LocationInfo locInfo, float z);
@@ -59,6 +63,7 @@ public:
 	Vector* getVelocity();
 	Vector* getScale();
 	float getRadius();
+	void setParent(Entity* aParent);
 };
 
 #endif

@@ -1,5 +1,7 @@
 #include "Entity.h"
 #include "PlaneEntity.h"
+#include <cstdlib>
+#include <time.h>
 
 Entity::Entity(Vector* aPosition, GLuint *aTexture, GLfloat* aVertices, float aRadius) {
 	position = aPosition;
@@ -9,9 +11,12 @@ Entity::Entity(Vector* aPosition, GLuint *aTexture, GLfloat* aVertices, float aR
 	texture = aTexture;
 	radius = ((aRadius == NULL) ? 0.8f : aRadius);
 	opacity = 1.0f;
+	passable = false;
+	parent = NULL;
 
 	if(aVertices) {
 		memcpy(&vertices[0], &aVertices[0], sizeof(vertices));
+		//delete[] aVertices;
 	} else {
 		GLfloat vertZero[12] = { 0 };
 		memcpy(&vertices[0], &vertZero[0], sizeof(vertices));
@@ -30,39 +35,31 @@ bool Entity::hasCollided(Entity* otherEntity) {
 	return (position->distanceTo(otherEntity->getPosition()) <= (radius + otherEntity->getRadius()));
 }
 
-// Check if this entity has collided with a plane entity.
-// The plane entity doesn't use colliders, but has its own implementation of hasCollided so let it handle checking
-// if it's collided with this entity.
-bool Entity::hasCollided(PlaneEntity* otherEntity) { return otherEntity->hasCollided(this); }
-
-// Check if entity has collided with another entity and stop further velocity if it has.
-// If the entity is not moving toward it (i.e., trying to get away), allow it to move.
+// Check if the other entity has collided with this entity and stop further velocity if it has.
+// If the entity is not moving toward it (i.e., trying to get away) or is passable, allow it to move.
 bool Entity::checkForCollision(Entity* otherEntity) {
 	bool collisionAndMovingToward = hasCollided(otherEntity) && isMovingToward(otherEntity);
-	if(collisionAndMovingToward) {
-		velocity->zero();
+	if(collisionAndMovingToward && !passable) {
+		otherEntity->getVelocity()->zero();
 	}
 	return collisionAndMovingToward;
 }
 
-// Check if entity has collided with a plane entity and stop further velocity if it has.
-// The plane entity doesn't use colliders, but has its own implementation of checkForCollisions so let it handle checking
-// if it's collided with this entity.
-bool Entity::checkForCollision(PlaneEntity* otherEntity) {
-	return otherEntity->checkForCollision(this);
-}
-
 // Rotate the entity according to its rotation variables.
 void Entity::rotateEntity() {
-	glRotatef(rotation->getX(), 1, 0, 0);
-	glRotatef(rotation->getY(), 0, 1, 0);
-	glRotatef(rotation->getZ(), 0, 0, 1);
+	Vector* rotate = parent ? rotation->add(parent->getRotation()) : rotation;
+	glRotatef(rotate->getX(), 1, 0, 0);
+	glRotatef(rotate->getY(), 0, 1, 0);
+	glRotatef(rotate->getZ(), 0, 0, 1);
+	if(parent) delete rotate;
 }
 
-// Check if this entity is moving toward another by comparing the distance to the other entity at its current position to the
-// distance to the other entity at its new position. If the latter is less than the first, its moving toward the other entity.
-bool Entity::isMovingToward(Entity* otherEntity) { return (position->distanceTo(otherEntity->getPosition()) > ((position->add(velocity))->distanceTo(otherEntity->getPosition())) ); }
-bool Entity::isMovingToward(PlaneEntity* otherEntity) { return otherEntity->isMovingToward(this); }
+// Check if the other entity is moving toward this one by comparing the distance to this entity at the other's current position to the
+// distance to this at the other's new position. If the latter is less than the first, its moving toward the other entity.
+bool Entity::isMovingToward(Entity* otherEntity) {
+	Vector* otherPosition = otherEntity->getPosition();
+	return (otherPosition->distanceTo(position) > ((otherPosition->add(otherEntity->getVelocity()))->distanceTo(position)) );
+}
 
 // Adds the velocity to the entity's position and reset velocity.
 void Entity::addVelocityToPosition() {
@@ -72,9 +69,53 @@ void Entity::addVelocityToPosition() {
 	delete tmp;
 }
 
+// Entity moves forwards or backwards based on the direction they're currently facing.
+void Entity::moveForward(bool forward) {
+	float sensitivity = forward ? -SENSITIVITY : SENSITIVITY;
+	float yaw = rotation->getY() * (PI / 180);
+	float pitch = rotation->getX() * (PI / 180);
+	
+	incrementXOf(VELOCITY, -sin(yaw) * sensitivity );
+	incrementYOf(VELOCITY, sin(pitch) * sensitivity );
+	incrementZOf(VELOCITY, cos(yaw) * sensitivity );
+}
+
+// Entity strafes left or right based on the direction they're currently facing.
+void Entity::strafe(bool left) {
+	float sensitivity = left ? -SENSITIVITY : SENSITIVITY;
+	float yaw = rotation->getY() * (PI / 180);
+	
+	incrementXOf(VELOCITY, cos(yaw) * sensitivity/2 );
+	incrementZOf(VELOCITY, sin(yaw) * sensitivity/2 );
+}
+
+// Rotates entity left or right
+void Entity::rotate(bool left) {
+	incrementYOf(ROTATION, left ? -SENSITIVITY_ROTATION : SENSITIVITY_ROTATION);
+}
+
 // Return the Vector location information based on its corresponding enum.
 Vector* Entity::getCorrespondingVector(LocationInfo locationInfo) {
 	return (locationInfo == POSITION) ? position : (locationInfo == ROTATION) ? rotation : (locationInfo == VELOCITY) ? velocity : scale;
+}
+
+// Random rotation for each axis from -5.0f to 5.0f
+void Entity::setRandomRotation() {
+	srand (time(NULL));
+
+	float x = (10.0f*((float)rand()/(float)RAND_MAX)-5.0f);
+	float y = (10.0f*((float)rand()/(float)RAND_MAX)-5.0f);
+	float z = (10.0f*((float)rand()/(float)RAND_MAX)-5.0f);
+
+	set(ROTATION, x, y, z);
+}
+
+// Set the values of a vector at once
+void Entity::set(LocationInfo locInfo, float x, float y, float z) {
+	Vector* vec = getCorrespondingVector(locInfo);
+	vec->setX(x);
+	vec->setY(y);
+	vec->setZ(z);
 }
 
 // Increment the values for use in creating fluid movement.
@@ -82,11 +123,13 @@ void Entity::incrementXOf(LocationInfo locInfo, float x) { getCorrespondingVecto
 void Entity::incrementYOf(LocationInfo locInfo, float y) { getCorrespondingVector(locInfo)->incrementY(y); }
 void Entity::incrementZOf(LocationInfo locInfo, float z) { getCorrespondingVector(locInfo)->incrementZ(z); }
 
-Vector* Entity::getPosition() { return position; }
-Vector* Entity::getRotation() { return rotation; }
+Vector* Entity::getPosition() { return parent ? position->add(parent->getPosition()) : position; }
+Vector* Entity::getRotation() { return parent ? rotation->add(parent->getRotation()) : rotation; }
 Vector* Entity::getVelocity() { return velocity; }
 Vector* Entity::getScale() { return scale; }
 float Entity::getRadius() { return radius; }
+
+void Entity::setParent(Entity* aParent) { parent = aParent; }
 
 // The entity knows how to draw itself and where to draw itself.
 void Entity::drawSelf() {
@@ -96,7 +139,9 @@ void Entity::drawSelf() {
 	
 	addVelocityToPosition();
 
-	glTranslatef(position->getX(), position->getY(), position->getZ());
+	Vector* pos = parent ? position->add(parent->getPosition()) : position;
+	glTranslatef(pos->getX(), pos->getY(), pos->getZ());
+	if(parent) delete pos;
 	rotateEntity();
 	glScalef(scale->getX(), scale->getY(), scale->getZ());
 
